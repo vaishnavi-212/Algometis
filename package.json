@@ -1,0 +1,24 @@
+{
+  "name": "algometis",
+  "version": "7.0.0",
+  "description": "Agentic algorithm tutor: describe a real-world problem, get the best DSA/DAA algorithm with transparent reasons, and watch it run step by step on your own data.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node server/index.js",
+    "dev": "node scripts/dev.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "setup": "npm install && npm run build"
+  },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}
