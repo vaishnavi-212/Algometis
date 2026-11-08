@@ -5,7 +5,15 @@ Describe a real-world problem in plain words, with your own names and numbers. A
 ![Home](docs/screenshots/home.png)
 ![Home in light mode](docs/screenshots/home-light.png)
 
-### What's new in v7
+### What's new in v8
+
+| Area | Change |
+|---|---|
+| **AI backup chain** | Add keys for several free providers (Gemini, Groq, OpenRouter, Cerebras, Mistral, plus optional paid ones or local Ollama). The new router switches automatically on rate limits, used-up quotas, errors and timeouts, with per-minute caps to avoid 429s. Offline rules are only the last resort. |
+| **`npm run check-llm`** | Tests every key/model with one tool-calling request and says exactly what is wrong. |
+| **AI status menu** | The pill in the top bar shows *AI online · n/n*; click it for each provider's live state, cool-down timers and reasons. The answer card says which model wrote it. |
+
+### Earlier (v7)
 
 | Area | Change |
 |---|---|
@@ -36,27 +44,47 @@ npm run build        # bundles the frontend into dist/
 npm start            # → http://localhost:8787
 ```
 
-With no API key it runs in **offline demo mode**: a rule-based stand-in plays the AI parts so you can click through everything. To switch on the real agent:
+With no API key it runs in **offline demo mode**: a rule-based stand-in plays the AI parts so you can click through everything.
 
-```bash
-cp .env.example .env
-# edit .env, for example:
-#   LLM_PROVIDER=gemini
-#   LLM_API_KEY=your-key       (free key from https://aistudio.google.com)
-npm start
+### Connecting the AI (with automatic backups)
+
+AlgoMetis does not depend on one AI provider. Every key you add becomes a **backup**, and the server's router (`server/llm/router.js`) switches between them on its own:
+
+```
+request → Gemini 3.8 Flash ─(limit hit)→ Gemini Flash-Lite → Groq gpt-oss-120b → Groq Qwen → OpenRouter → Cerebras → Mistral → (Ollama on your PC) → offline rules
 ```
 
-| `LLM_PROVIDER` | Default model (change with `LLM_MODEL`) | Key needed |
-|---|---|---|
-| `gemini` | `gemini-2.5-flash` | yes (free tier available) |
-| `groq` | `llama-3.3-70b-versatile` | yes (free tier available) |
-| `openai` | `gpt-4o-mini` | yes |
-| `anthropic` | `claude-sonnet-5-5` | yes |
-| `openrouter` | `meta-llama/llama-3.3-70b-instruct` | yes |
-| `ollama` | `qwen2.5:7b` (local; needs a tool-calling model) | no |
-| `mock` | offline demo | no |
+1. Copy `.env.example` to `.env`.
+2. Paste in as many free keys as you can get (each takes about 2 minutes):
 
-Model names change over time. If a default model has been retired, set `LLM_MODEL` to a current one from the provider's docs. Any OpenAI-compatible endpoint works through `LLM_BASE_URL`.
+| Variable | Where to get it (free) | Default models (tried in order) |
+|---|---|---|
+| `GEMINI_API_KEY` | https://aistudio.google.com/apikey | gemini-3.8-flash, gemini-3.5-flash-lite, gemini-3.6-flash |
+| `GROQ_API_KEY` | https://console.groq.com/keys | openai/gpt-oss-120b, qwen/qwen3.8-27b, llama-3.3-70b-versatile |
+| `OPENROUTER_API_KEY` | https://openrouter.ai/settings/keys | openrouter/free (routes to a free model) |
+| `CEREBRAS_API_KEY` | https://cloud.cerebras.ai | gpt-oss-120b, qwen-3-235b-a22b-instruct-2507 |
+| `MISTRAL_API_KEY` | https://console.mistral.ai/api-keys | mistral-small-latest |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | paid, optional | gpt-4o-mini, claude-sonnet-5-5 |
+| `OLLAMA_URL` | https://ollama.com (runs on your own PC, never rate limited) | qwen2.5:7b |
+
+3. Run `npm run check-llm`. It sends one tiny test to every entry and prints `OK` or the exact reason it failed (bad key, model renamed, limit).
+4. Run `npm start`. The terminal lists the chain, and the status pill at the top of the app shows **AI online · n/n**. Click it to see every provider's live state.
+
+**How the router keeps the AI available**
+
+| Situation | What happens |
+|---|---|
+| A provider is near its free per-minute limit | Each entry has its own requests-per-minute cap set a little under the free limit (`GEMINI_RPM`, `GROQ_RPM`, …), so traffic moves to the next one *before* a 429. |
+| 429 "rate limited" | That entry cools down for the time the provider asks for (Retry-After), then comes back automatically. |
+| Daily free quota used up | That entry cools down for an hour; the others carry on. |
+| Server error, timeout (30 s), network error | Cool-down of 15 s, 30 s, 1 min… up to 10 min, then retried. |
+| Wrong key (401/403) or model renamed (404) | Switched off for 6 hours so it never slows requests; `check-llm` and the status menu say why. |
+| Everything is briefly limited | Waits up to 8 s (`LLM_MAX_WAIT_MS`) for the first one to free up. |
+| Nothing can answer at all | Offline rules answer, so the student still gets a result (set `LLM_OFFLINE_FALLBACK=off` to show an error instead). |
+
+A switch can even happen in the middle of one answer: the agent keeps one internal message format and every provider adapter translates it. Each free model usually has its **own** quota, which is why several models per provider are listed, and you can add several keys per provider (`GROQ_API_KEY=key1,key2`). The order can be changed with `LLM_CHAIN=groq,gemini,...` and models with `GEMINI_MODELS=...`. Model names change over time: if `check-llm` says *model not available*, put a current name from the provider's model list in `<PROVIDER>_MODELS`.
+
+The old single-provider settings (`LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`) still work and go first in the chain.
 
 Development mode (rebuilds on save and restarts the server): `npm run dev`. Run the tests with `npm test`.
 
@@ -197,7 +225,7 @@ algometis/
 │   ├── visualizer/         views (bars, graph, DP table, items, timeline, recursion tree), panels, code panel, input, tutor
 │   ├── practice/           Predict, Guess the algorithm, Which fits, stats
 │   └── components/         navbar + search, recommendation card, trace, UI kit
-├── tests/                  node:test suites (33 tests)
+├── tests/                  node:test suites (42 tests)
 ├── scripts/                build.mjs (esbuild), dev.mjs
 └── docs/screenshots/
 ```
@@ -257,3 +285,39 @@ Inter, Inter Tight, Poppins, Lora and JetBrains Mono are loaded from Google Font
 
 ![Graph visualizer](docs/screenshots/graph.png)
 ![Explore](docs/screenshots/explore.png)
+
+## Student C-code review (prototype implementation)
+
+The Mentor workspace is being repurposed as a two-input code-review flow: students provide the assignment question and editable C source. The backend returns a structured report with a likely algorithm classification, code observations, algorithm alternatives and 15 metrics.
+
+### Current 15 metrics
+
+1. Time complexity (static pattern inference)
+2. Auxiliary space complexity (static estimate)
+3. Estimated execution time (model-based; not measured runtime)
+4. Estimated declared memory footprint
+5. Cache memory / locality (qualitative only; hardware cache counters unavailable)
+6. Execution-speed growth class
+7. Variable sizes and assumed bytes per declaration
+8. Loop count and nesting pattern
+9. Comparison/operator source count
+10. Data-movement / swap source-pattern count
+11. Recursion detection
+12. Input scalability at the stated or reference input size
+13. Approximate cyclomatic complexity
+14. Source size (lines and characters)
+15. Algorithm-pattern recognition / maintainability signal
+
+### Agent stages in this prototype
+
+- Assignment Understanding Agent: classifies the task from the question.
+- C Code Analysis Agent: strips comments and identifies common algorithm patterns and C source risks.
+- Metrics Evaluation Agent: calculates the 15 static/model-based metrics.
+- Algorithm Recommendation Agent: compares sorting alternatives against stated constraints.
+- Critic / Validation Agent: exposes confidence and analysis limitations rather than presenting estimates as measured facts.
+
+### Important measurement and safety boundary
+
+This prototype does **not** compile or execute student-submitted C. Arbitrary source execution on the application server would be unsafe without an isolated sandbox. Consequently, runtime, peak memory and cache hardware counters are not measured for the submitted program. Execution-time and memory values are explicitly estimates; hardware-dependent cache values are marked unknown. A later phase should add a disposable container/VM sandbox with CPU, memory, wall-clock and output limits, plus OS-specific performance-counter support where available.
+
+The code classifier and complexity estimator are heuristic and intended for an initial course-project milestone. They can misclassify unusual naming, macros, pointer-heavy code, indirect recursion and complex control flow. A compiler-backed parser/AST and benchmark harness are planned extensions.
