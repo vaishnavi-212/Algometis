@@ -42,6 +42,7 @@ export const api = {
   health: () => request('GET', '/api/health'),
   catalog: () => request('GET', '/api/catalog'),
   solve: (threadId, message) => request('POST', '/api/agent/solve', { threadId, message, studentId: studentId() }),
+  analyzeCode: (question, code) => request('POST', '/api/agent/analyze-code', { question, code, studentId: studentId() }),
   rescore: (body) => request('POST', '/api/rescore', body),
   tutor: (body) => request('POST', '/api/agent/tutor', { ...body, studentId: studentId() }),
   profile: () => request('GET', `/api/profile/${studentId()}`),

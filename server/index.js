@@ -14,6 +14,7 @@ import { FAMILIES, scoreFamily } from '../shared/scoring.js'
 import { INPUT_KINDS, deriveFacts } from '../shared/schemas.js'
 import { buildEvidence, validateFor } from '../shared/evidence.js'
 import { jsonSafe } from '../shared/util.js'
+import { analyzeCSubmission } from './agent/codeReview.js'
 
 export function createApp({ llm = createLLM(), store = createProfileStore(config.dataDir), staticDir = path.join(ROOT, 'dist') } = {}) {
   const checkpointer = new MemoryCheckpointer()
@@ -61,7 +62,7 @@ export function createApp({ llm = createLLM(), store = createProfileStore(config
   const str = (v, max = 2000) => String(v ?? '').slice(0, max)
 
   const routes = {
-    'GET /api/health': async () => ({ ok: true, provider: llm.provider, label: llm.label, model: llm.model, offlineDemo: !!llm.isMock }),
+    'GET /api/health': async () => ({ ok: true, provider: llm.provider, label: llm.label, model: llm.model, offlineDemo: !!llm.isMock, llm: llm.status ? llm.status() : null }),
 
     'GET /api/catalog': async () => ({
       categories: CATEGORIES,
@@ -85,7 +86,7 @@ export function createApp({ llm = createLLM(), store = createProfileStore(config
         }
       } catch (e) {
         await checkpointer.delete(threadId)
-        return [502, { error: `Agent failed: ${e.message}`, hint: llm.isMock ? undefined : 'Check LLM_PROVIDER / LLM_API_KEY / LLM_MODEL in .env' }]
+        return [502, { error: `Agent failed: ${e.message}`, hint: llm.isMock ? undefined : 'Check the API keys in .env (run: npm run check-llm)' }]
       }
       const trace = out.state.trace
       if (out.status === 'interrupted') return { status: 'clarify', threadId, questions: out.interrupt.questions, message: out.interrupt.questions.join('\n'), trace, path: out.path }
@@ -106,6 +107,14 @@ export function createApp({ llm = createLLM(), store = createProfileStore(config
         evidence = runnable ? buildEvidence(scoring, input, scoring.best) : null
       }
       return jsonSafe({ scoring, evidence, chosen: scoring.best, evidenceNote: evidence ? null : 'The new best algorithm cannot run on the current data (e.g. it needs different data); edit the data to see measurements.' })
+    },
+
+    'POST /api/agent/analyze-code': async (body) => {
+      const question = str(body.question, 12000).trim()
+      const code = str(body.code, 50000).trim()
+      if (!question || !code) return [400, { error: 'Both assignment question and C code are required.' }]
+      try { return analyzeCSubmission({ question, code }) }
+      catch (e) { return [400, { error: e.message }] }
     },
 
     'POST /api/agent/tutor': async (body) => {
@@ -170,8 +179,13 @@ export function createApp({ llm = createLLM(), store = createProfileStore(config
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith(path.join('server', 'index.js'))) {
   const server = createApp()
   server.listen(config.port, () => {
-    const l = config.llm
+    const chain = config.llmChain
     console.log(`\n  AlgoMetis running → http://localhost:${config.port}`)
-    console.log(`  LLM: ${l.label} (${l.model})${l.kind === 'mock' ? '  ← offline demo mode; set LLM_PROVIDER and LLM_API_KEY in .env for real AI' : ''}\n`)
+    if (!chain.length) console.log('  AI: offline demo mode (no API keys in .env). See .env.example to connect free providers.\n')
+    else {
+      console.log(`  AI backup chain (${chain.length} entries, tried top to bottom):`)
+      chain.forEach((e, i) => console.log(`    ${String(i + 1).padStart(2)}. ${e.label.padEnd(18)} ${e.model.padEnd(34)} key ${e.keyHint}  (≤${e.rpm}/min)`))
+      console.log(`  Offline rules are used only if every entry is unavailable. Test keys with: npm run check-llm\n`)
+    }
   })
 }
