@@ -321,3 +321,32 @@ The Mentor workspace is being repurposed as a two-input code-review flow: studen
 This prototype does **not** compile or execute student-submitted C. Arbitrary source execution on the application server would be unsafe without an isolated sandbox. Consequently, runtime, peak memory and cache hardware counters are not measured for the submitted program. Execution-time and memory values are explicitly estimates; hardware-dependent cache values are marked unknown. A later phase should add a disposable container/VM sandbox with CPU, memory, wall-clock and output limits, plus OS-specific performance-counter support where available.
 
 The code classifier and complexity estimator are heuristic and intended for an initial course-project milestone. They can misclassify unusual naming, macros, pointer-heavy code, indirect recursion and complex control flow. A compiler-backed parser/AST and benchmark harness are planned extensions.
+
+## Integrated Code Review workspace (v9 + v8)
+
+The **Code Review** navigation item opens the student C-code review workspace. It accepts an assignment question and editable C source, then returns heuristic algorithm identification, code observations, 15 metrics, alternative algorithms and an explanation of measurement limitations.
+
+The original v8 learning experience is retained in the same application:
+
+- **Visualizers**: algorithm explorer and step-by-step execution visualizations, including code/step previews.
+- **Practice**: interactive algorithm practice games.
+- **Home**: original landing page and algorithm preview.
+- **Agentic recommendation workflow**: original problem-solving agent graph, tool calls, recommendation evidence and AI tutor.
+
+The Code Review endpoint is `POST /api/agent/analyze-code`. The existing solve, catalog, rescore, tutor and student-profile endpoints remain available.
+
+### Run the integrated application
+
+```bash
+npm install
+npm run dev
+```
+
+Open the local URL printed by the development server. For a production-style run:
+
+```bash
+npm run build
+npm start
+```
+
+Code Review currently performs static heuristic inspection. It does not compile or execute untrusted student C code, and its runtime/memory/cache estimates are explicitly labelled as estimates or unavailable where appropriate.

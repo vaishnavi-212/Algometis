@@ -1,7 +1,7 @@
 {
   "name": "algometis",
-  "version": "8.0.0",
-  "description": "Agentic algorithm tutor: describe a real-world problem, get the best DSA/DAA algorithm with transparent reasons, and watch it run step by step on your own data.",
+  "version": "9.0.0",
+  "description": "AlgoMetis: agentic algorithm tutor, interactive visualizers, practice games, and student C-code review.",
   "type": "module",
   "private": true,
   "engines": {

@@ -1,13 +1,15 @@
-# AlgoMetis — Code Review Milestone
+# AlgoMetis — Integrated v9 Milestone
 
 ## What is implemented in this milestone
 
-- Replaced the old chat-first Mentor page with a two-input workspace: assignment prompt + editable C source editor.
+- Added a dedicated two-input Code Review workspace while preserving the original AI Mentor page as a separate feature.
 - Added a backend `POST /api/agent/analyze-code` endpoint.
 - Added a five-stage analysis pipeline (assignment understanding, C-code analysis, metric evaluation, algorithm recommendation, critic/validation).
 - Added heuristic C algorithm recognition for Bubble, Selection, Insertion, Merge, Quick and Heap Sort, plus basic question classification for sorting/searching/graph tasks.
 - Added 15 report metrics, source warnings, algorithm trade-off alternatives and a concise summary.
 - Added responsive UI sections for overview, metrics, alternatives and code observations.
+- Preserved the v8 home page, AI Mentor recommendation workflow, algorithm visualizers/code previews, tutor, explorer and practice games.
+- Added separate navigation entries for AI Mentor and Code Review.
 - Added automated tests for the new analysis module.
 
 ## 15 metrics returned for every analysis
