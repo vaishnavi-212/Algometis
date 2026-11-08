@@ -9,11 +9,25 @@ let idCounter = 0
 const newId = () => `call_${Date.now().toString(36)}_${(idCounter++).toString(36)}`
 
 export class LLMError extends Error {
-  constructor(message, status, body) {
+  constructor(message, status, body, retryAfterMs) {
     super(message)
     this.status = status
     this.body = body
+    this.retryAfterMs = retryAfterMs
   }
+}
+
+// "Retry-After: 20" (seconds) or an HTTP date; Gemini also puts "retryDelay": "17s" in the body.
+function retryAfter(res, text) {
+  const h = res.headers?.get?.('retry-after')
+  if (h) {
+    const n = Number(h)
+    if (!Number.isNaN(n)) return n * 1000
+    const d = Date.parse(h)
+    if (!Number.isNaN(d)) return Math.max(0, d - Date.now())
+  }
+  const m = /retryDelay"?\s*:\s*"?(\d+(?:\.\d+)?)s/.exec(text || '')
+  return m ? Number(m[1]) * 1000 : undefined
 }
 
 async function postJSON(url, headers, body, { timeoutMs = 60000, retries = 2, fetchImpl = fetch } = {}) {
@@ -31,8 +45,8 @@ async function postJSON(url, headers, body, { timeoutMs = 60000, retries = 2, fe
         json = null
       }
       if (res.ok && json) return json
-      const err = new LLMError(`LLM HTTP ${res.status}: ${(json?.error?.message || text || '').slice(0, 300)}`, res.status, json || text)
-      if (res.status === 429 || res.status >= 500) {
+      const err = new LLMError(`LLM HTTP ${res.status}: ${(json?.error?.message || text || '').slice(0, 300)}`, res.status, json || text, retryAfter(res, text))
+      if ((res.status === 429 || res.status >= 500) && attempt < retries) {
         lastErr = err
         await new Promise((r) => setTimeout(r, 800 * 2 ** attempt))
         continue
@@ -59,7 +73,7 @@ function parseArgs(raw) {
 }
 
 // ---------------- OpenAI-compatible (OpenAI, Gemini, Groq, OpenRouter, Ollama) ----------------
-export function createOpenAICompatible({ baseURL, apiKey, model, label, fetchImpl }) {
+export function createOpenAICompatible({ baseURL, apiKey, model, label, fetchImpl, retries = 2, timeoutMs = 60000 }) {
   const toWire = (system, messages) => [
     { role: 'system', content: system },
     ...messages.map((m) => {
@@ -90,12 +104,12 @@ export function createOpenAICompatible({ baseURL, apiKey, model, label, fetchImp
       const headers = apiKey ? { authorization: `Bearer ${apiKey}` } : {}
       let json
       try {
-        json = await postJSON(`${baseURL.replace(/\/$/, '')}/chat/completions`, headers, body, { fetchImpl })
+        json = await postJSON(`${baseURL.replace(/\/$/, '')}/chat/completions`, headers, body, { fetchImpl, retries, timeoutMs })
       } catch (e) {
         // Some OpenAI-compatible servers reject a *named* tool_choice; fall back to "required".
         if (e.status === 400 && typeof body.tool_choice === 'object') {
           body.tool_choice = 'required'
-          json = await postJSON(`${baseURL.replace(/\/$/, '')}/chat/completions`, headers, body, { fetchImpl })
+          json = await postJSON(`${baseURL.replace(/\/$/, '')}/chat/completions`, headers, body, { fetchImpl, retries, timeoutMs })
         } else throw e
       }
       const msg = json.choices?.[0]?.message || {}
@@ -106,7 +120,7 @@ export function createOpenAICompatible({ baseURL, apiKey, model, label, fetchImp
 }
 
 // ---------------- Anthropic Messages API ----------------
-export function createAnthropic({ baseURL, apiKey, model, label, fetchImpl }) {
+export function createAnthropic({ baseURL, apiKey, model, label, fetchImpl, retries = 2, timeoutMs = 60000 }) {
   const toWire = (messages) => {
     const out = []
     const push = (role, blocks) => {
@@ -134,7 +148,7 @@ export function createAnthropic({ baseURL, apiKey, model, label, fetchImpl }) {
         body.tools = tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters }))
         body.tool_choice = toolChoice === 'required' ? { type: 'any' } : toolChoice && toolChoice.name ? { type: 'tool', name: toolChoice.name } : { type: 'auto' }
       }
-      const json = await postJSON(`${baseURL.replace(/\/$/, '')}/messages`, { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }, body, { fetchImpl })
+      const json = await postJSON(`${baseURL.replace(/\/$/, '')}/messages`, { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }, body, { fetchImpl, retries, timeoutMs })
       const blocks = json.content || []
       return {
         text: blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n'),
