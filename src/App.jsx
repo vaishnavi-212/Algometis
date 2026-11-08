@@ -32,7 +32,10 @@ export function App() {
     applyLook(look)
   }, [look])
   useEffect(() => {
-    api.health().then(setHealth).catch(() => setHealth(null))
+    const load = () => api.health().then(setHealth).catch(() => setHealth(null))
+    load()
+    const id = setInterval(load, 20000)
+    return () => clearInterval(id)
   }, [])
 
   const [page = 'home', ...params] = route

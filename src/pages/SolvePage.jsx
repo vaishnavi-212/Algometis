@@ -1,158 +1,73 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { api } from '../api.js'
-import { RecommendationCard } from '../components/RecommendationCard.jsx'
-import { TracePanel } from '../components/TracePanel.jsx'
-import { Kicker, Icon } from '../components/ui.jsx'
+import { Kicker } from '../components/ui.jsx'
 
-export const EXAMPLES = [
-  { title: 'Food delivery routes', text: 'I run a cloud kitchen and need the fastest route from the kitchen to the station. Kitchen to Market 4 min, Kitchen to Park 2 min, Park to Market 1 min, Market to School 5 min, School to Station 6 min, Park to Mall 10 min, Mall to Station 2 min.' },
-  { title: 'Wi-Fi cable between hostels', text: 'Connect all our hostels with the least total cable: H1-H2 70, H1-H3 50, H2-H3 80, H2-H4 90, H3-H4 70, H4-H5 60, H3-H5 150, H4-H6 80, H5-H6 90 (metres).' },
-  { title: 'Course prerequisites', text: 'Order my courses: Maths I before Maths II, Programming before Data Structures, Data Structures before Algorithms and DBMS, and ML needs Maths II and Algorithms.' },
-  { title: 'Seminar hall bookings', text: 'The seminar hall has these requests: Quiz 9-10, Debate 9:30-11, Talk 10-11:30, Workshop 11-1pm, Demo 11:30-12:30, Panel 12:30-2pm. Fit the most events without overlap.' },
-  { title: 'Packing a trip bag', text: 'I have a 10 kg bag. Laptop 5 kg value 10, camera 4 kg value 40, jacket 6 kg value 30, book 3 kg value 50. Items cannot be split. Maximise the value.' },
-  { title: 'Ranking students', text: 'Rank 5000 students by exam score; students with equal scores must stay in roll-number order. Sample: Asha 72, Ben 45, Chen 88, Dev 31, Eva 64, Farah 72.' },
-  { title: 'Cashback trip costs', text: 'Cheapest way from Home to Office, one-way roads, some give cashback: Home to Mall 60, Home to Cafe 70, Mall to Bank 50, Cafe to Bank -30, Mall to Office -40, Bank to Office 20 (rupees).' },
-  { title: 'Roll number lookup', text: 'In the attendance list 34, 7, 23, 32, 5, 62, 42, 15 find roll number 42.' },
-  { title: 'DNA similarity', text: 'How similar are the DNA fragments "AGGTAB" and "GXTXAYB"? Find their longest common subsequence.' },
-  { title: 'Canteen tokens', text: 'Our canteen has tokens worth 1, 3 and 4. What is the fewest number of tokens to give change of 6?' },
-]
+const STARTER = `#include <stdio.h>\n\nvoid bubbleSort(int a[], int n) {\n    for (int i = 0; i < n - 1; i++) {\n        for (int j = 0; j < n - i - 1; j++) {\n            if (a[j] > a[j + 1]) {\n                int temp = a[j];\n                a[j] = a[j + 1];\n                a[j + 1] = temp;\n            }\n        }\n    }\n}\n\nint main(void) {\n    int a[] = {64, 25, 12, 22, 11};\n    int n = sizeof(a) / sizeof(a[0]);\n    bubbleSort(a, n);\n    for (int i = 0; i < n; i++) printf("%d ", a[i]);\n    return 0;\n}`
 
-const newThread = () => `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+function MetricCard({ item }) {
+  const tone = item.confidence === 'high' ? 'good' : item.confidence === 'low' ? 'caution' : ''
+  return <article className="review-metric">
+    <div className="review-metric-top"><strong>{item.name}</strong><span className={`confidence ${tone}`}>{item.confidence} confidence</span></div>
+    <div className="review-metric-value">{item.value}</div>
+    <p>{item.method}</p>
+  </article>
+}
 
-export function SolvePage({ store, setStore, health }) {
-  const { threadId, messages, result, awaiting } = store
-  const [text, setText] = useState('')
+export function SolvePage() {
+  const [question, setQuestion] = useState('Write a C program to sort n numbers in ascending order.')
+  const [code, setCode] = useState(STARTER)
+  const [result, setResult] = useState(null)
   const [busy, setBusy] = useState(false)
-  const logEnd = useRef(null)
-  useEffect(() => {
-    // scroll only the chat box, never the whole page
-    const box = logEnd.current?.parentElement
-    if (box) box.scrollTop = box.scrollHeight
-  }, [messages, busy])
-
-  const send = async (msg) => {
-    const m = (msg ?? text).trim()
-    if (!m || busy) return
-    setText('')
-    const tid = awaiting ? threadId : newThread()
-    setStore((s) => ({ ...s, threadId: tid, messages: [...(awaiting ? s.messages : []), { role: 'me', text: m }], result: awaiting ? s.result : null }))
-    setBusy(true)
-    try {
-      const r = await api.solve(tid, m)
-      if (r.status === 'clarify') {
-        setStore((s) => ({ ...s, awaiting: true, messages: [...s.messages, { role: 'agent', text: r.message, q: true }], partialTrace: r.trace }))
-      } else {
-        setStore((s) => ({ ...s, awaiting: false, messages: [...s.messages, { role: 'agent', text: r.message.replace(/\*\*/g, '') }], result: r }))
-      }
-    } catch (e) {
-      setStore((s) => ({ ...s, awaiting: false, messages: [...s.messages, { role: 'agent', text: `Something went wrong: ${e.message}` }] }))
-    } finally {
-      setBusy(false)
-    }
+  const [error, setError] = useState('')
+  const [tab, setTab] = useState('overview')
+  const [showAll, setShowAll] = useState(true)
+  const ready = question.trim().length > 0 && code.trim().length > 0
+  const analyze = async () => {
+    if (!ready || busy) return
+    setBusy(true); setError(''); setResult(null)
+    try { setResult(await api.analyzeCode(question, code)); setTab('overview') }
+    catch (e) { setError(e.message || 'Analysis failed. Please try again.') }
+    finally { setBusy(false) }
   }
+  const visibleMetrics = useMemo(() => showAll ? result?.metrics || [] : (result?.metrics || []).slice(0, 5), [result, showAll])
 
-  const reset = () => setStore({ threadId: null, messages: [], result: null, awaiting: false })
-
-  return (
-    <div className="solve">
-      <div className="card chat">
-        <div className="card-h" style={{ paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
-          <div>
-            <Kicker>AI mentor</Kicker>
-            <h3 style={{ fontSize: 16, marginTop: 4 }}>Describe your problem</h3>
-          </div>
-          <span className="grow" />
-          {messages.length > 0 && (
-            <button className="btn sm ghost" onClick={reset}>
-              New problem
-            </button>
-          )}
-        </div>
-        <div className="chat-log">
-          {messages.length === 0 && (
-            <>
-              <p className="muted tiny" style={{ margin: 0 }}>
-                Tell me a real-world situation in plain words, with your own names and numbers. I’ll pick the best algorithm, show you <em>why</em>, and visualize it on your data. Try one:
-              </p>
-              <div className="gallery">
-                {EXAMPLES.map((ex) => (
-                  <button key={ex.title} onClick={() => send(ex.text)}>
-                    <div className="g-title">{ex.title}</div>
-                    <div className="g-text">{ex.text}</div>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-          {messages.map((m, i) => (
-            <div key={i} className={`bubble ${m.role === 'me' ? 'me' : 'agent'} ${m.q ? 'q' : ''}`}>
-              <span className="who">{m.role === 'me' ? 'You' : m.q ? 'Agent needs one detail' : 'Agent'}</span>
-              {m.text}
-            </div>
-          ))}
-          {busy && (
-            <div className="working">
-              <span className="spinner" /> Agent working (memory → router → analyzer → tools → critic → explainer)…
-            </div>
-          )}
-          <div ref={logEnd} />
-        </div>
-        <div className="chat-input">
-          <textarea data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" className="text" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), send())} placeholder={awaiting ? 'Answer the question above…' : 'e.g. fastest route between 5 places, travel time in minutes'} rows={2} />
-          <button className="btn cyan" onClick={() => send()} disabled={busy || !text.trim()}>
-            Send
-          </button>
-        </div>
-      </div>
-
-      <div className="stack">
-        {health?.offlineDemo && (
-          <div className="banner warn">
-            <strong>Offline demo mode:</strong> no LLM key is configured, so rule-based stand-ins play the AI parts. The story parser still reads your names and numbers (links like “A to B 4”, lists, items, time slots), but phrasing must be simple. Add <code>LLM_PROVIDER</code> and <code>LLM_API_KEY</code> to <code>.env</code> for the real agent.
-          </div>
-        )}
-        {result?.status === 'done' && <RecommendationCard rec={result.recommendation} trace={result.trace} path={result.path} />}
-        {result && result.status !== 'done' && (
-          <div className="card">
-            <div className="card-b stack" style={{ paddingTop: 16 }}>
-              <div>{result.message}</div>
-              {result.suggestAlgorithm && (
-                <a className="btn sm" href={`#/visualize/${result.suggestAlgorithm}`} style={{ alignSelf: 'flex-start' }}>
-                  Open the visualizer
-                </a>
-              )}
-              <details>
-                <summary className="tiny muted">How I decided</summary>
-                <TracePanel trace={result.trace || []} />
-              </details>
-            </div>
-          </div>
-        )}
-        {!result && (
-          <div className="card empty-state">
-            <div>
-              <h2>From a real problem to the right algorithm</h2>
-              <p className="muted small">Every recommendation comes with the rules it was scored on, measurements on your own data, and the full agent trace. Purple = LLM step, grey = deterministic code.</p>
-              <div className="flow">
-                {[
-                  ['memory', 0],
-                  ['router', 1],
-                  ['analyzer', 1],
-                  ['clarify?', 0],
-                  ['story parser', 0],
-                  ['planner + tools', 1],
-                  ['critic', 0],
-                  ['explainer + fact-check', 1],
-                ].map(([s, ai]) => (
-                  <span key={s} className={ai ? 'ai' : ''}>
-                    {s}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+  return <div className="code-review-page">
+    <div className="review-hero">
+      <div><Kicker>ALGOMETIS · STUDENT CODE REVIEW</Kicker><h1>Bring your code.<br/><span>We'll inspect the thinking.</span></h1><p>Submit the assignment question and your C solution. AlgoMetis identifies the likely algorithm, reviews its structure, evaluates 15 metrics and compares it with stronger alternatives.</p></div>
+      <div className="review-hero-chip"><span className="pulse-dot"/> <span>Prototype · C language</span><b>15 metrics</b></div>
     </div>
-  )
+
+    <section className="review-input-grid">
+      <div className="review-panel">
+        <div className="review-panel-head"><div><span className="step-index">01</span><div><h2>Assignment question</h2><p>What did your lecturer ask you to solve?</p></div></div><span className="panel-tag">NATURAL LANGUAGE</span></div>
+        <textarea className="review-question" value={question} onChange={e=>setQuestion(e.target.value)} placeholder="Paste the complete assignment question here..." rows={6}/>
+        <div className="review-hint">Include constraints such as input size, sorted/unsorted data, memory limits or stability requirements.</div>
+      </div>
+      <div className="review-panel code-panel">
+        <div className="review-panel-head"><div><span className="step-index">02</span><div><h2>Your C solution</h2><p>Paste or edit the code you wrote.</p></div></div><span className="language-pill">C <span>⌄</span></span></div>
+        <div className="editor-toolbar"><span><i/> main.c</span><span>Editable source</span><button onClick={()=>setCode(STARTER)}>Reset example</button></div>
+        <textarea spellCheck="false" autoCapitalize="off" autoCorrect="off" className="review-code" value={code} onChange={e=>setCode(e.target.value)} placeholder="// Write or paste your C code here..." rows={18}/>
+        <div className="editor-foot"><span>{code.split('\n').length} lines</span><span>{code.length.toLocaleString()} characters</span></div>
+      </div>
+    </section>
+
+    <div className="review-action-row"><div><strong>Ready for a code review?</strong><span>Five specialized analysis stages · Static C inspection · No code execution</span></div><button className="btn cyan review-run" onClick={analyze} disabled={!ready || busy}>{busy ? <><span className="spinner"/> Reviewing…</> : 'Analyze my code →'}</button></div>
+    {error && <div className="banner warn">{error}</div>}
+    {busy && <div className="agent-progress">{['Assignment understanding','C code analysis','15-metric evaluation','Algorithm comparison','Critic and validation'].map((x,i)=><div key={x}><span className="spinner"/><span>{x}</span></div>)}</div>}
+
+    {result && <section className="review-results" aria-live="polite">
+      <div className="results-title"><div><Kicker>ANALYSIS COMPLETE</Kicker><h2>Your code, decoded.</h2><p>Here is what the system found and how your implementation compares.</p></div><span className="result-status">✓ Analysis ready</span></div>
+      <div className="agent-strip">{result.agents.map((a,i)=><div key={a.name}><span className="agent-number">0{i+1}</span><div><strong>{a.name}</strong><small>{a.detail}</small></div><span className="agent-done">✓</span></div>)}</div>
+      <div className="review-tabs">{[['overview','Overview'],['metrics','15 metrics'],['alternatives','Alternatives'],['issues','Code observations']].map(([id,label])=><button className={tab===id?'active':''} onClick={()=>setTab(id)} key={id}>{label}</button>)}</div>
+      {tab==='overview' && <div className="review-overview-grid">
+        <article className="review-panel detected-card"><Kicker>DETECTED IN YOUR CODE</Kicker><h3>{result.detected.name}</h3><p>{result.detected.confidence} identification · {result.assignment.category}</p><div className="complexity-pair"><div><small>Time complexity</small><b>{result.metrics[0].value}</b></div><div><small>Auxiliary space</small><b>{result.metrics[1].value}</b></div></div></article>
+        <article className="review-panel best-card"><Kicker>RECOMMENDED ALTERNATIVE</Kicker><h3>{result.recommendation.name}</h3><p>{result.recommendation.reason}</p><div className="best-chips"><span>Time: {result.recommendation.avg}</span><span>Space: {result.recommendation.space}</span><span>{result.recommendation.stable?'Stable':'Not stable'}</span></div></article>
+        <article className="review-panel summary-card"><Kicker>AGENT SUMMARY</Kicker><p>{result.summary}</p></article>
+      </div>}
+      {tab==='metrics' && <><div className="metrics-grid">{visibleMetrics.map(m=><MetricCard item={m} key={m.name}/>)}</div><button className="btn sm ghost" onClick={()=>setShowAll(v=>!v)}>{showAll?'Show key metrics':'Show all 15 metrics'}</button></>}
+      {tab==='alternatives' && <div className="alternatives-grid">{result.alternatives.map(a=><article className={`review-metric ${a.id===result.recommendation.id?'recommended':''}`} key={a.id}><div className="review-metric-top"><strong>{a.name}</strong>{a.id===result.recommendation.id&&<span className="confidence good">Recommended</span>}</div><div className="alt-complexity"><span>Best {a.best}</span><span>Average {a.avg}</span><span>Worst {a.worst}</span><span>Space {a.space}</span></div><p>{a.suitability}</p></article>)}</div>}
+      {tab==='issues' && <div className="review-panel issue-list">{result.issues.length ? result.issues.map((x,i)=><p key={i}>⚠ {x}</p>) : <p>No obvious heuristic warnings found. This does not replace compiler diagnostics or testing.</p>}<h3>Analysis boundaries</h3>{result.limitations.map((x,i)=><p className="muted" key={i}>{i+1}. {x}</p>)}</div>}
+      <div className="review-disclaimer"><strong>Interpret metrics responsibly.</strong> Static source inspection can infer patterns, but it cannot measure the submitted program's actual runtime, peak memory or CPU cache misses. Those require a controlled compile-and-benchmark environment. This prototype labels estimates and unavailable hardware counters instead of inventing measurements.</div>
+    </section>}
+  </div>
 }

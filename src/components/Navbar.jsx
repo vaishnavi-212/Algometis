@@ -6,7 +6,7 @@ import { Icon } from './ui.jsx'
 
 const LINKS = [
   ['home', 'Home', '#/'],
-  ['mentor', 'AI Mentor', '#/mentor'],
+  ['mentor', 'Code Review', '#/mentor'],
   ['explore', 'Visualizers', '#/explore'],
   ['practice', 'Practice', '#/practice'],
 ]
@@ -147,6 +147,65 @@ function Appearance({ look, onLook }) {
   )
 }
 
+const STATE_TEXT = { ready: 'ready', busy: 'at its per-minute cap', cooling: 'cooling down', disabled: 'switched off' }
+
+/** Live status of the AI backup chain (from /api/health, refreshed every 20 s by App). */
+function AIStatus({ health }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const close = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+  const st = health.llm
+  const mode = health.offlineDemo || !st ? 'offline' : st.mode
+  const text = mode === 'offline' ? 'Offline mode' : mode === 'busy' ? 'AI busy · retrying' : `AI online · ${st.ready}/${st.configured}`
+  return (
+    <div className="appearance hide-sm" ref={ref}>
+      <button className={`status ${mode}`} onClick={() => setOpen((o) => !o)} aria-expanded={open} title="AI provider status">
+        <i />
+        {text}
+      </button>
+      {open && (
+        <div className="appearance-pop ai-pop" role="dialog" aria-label="AI status">
+          <div className="ap-label">AI backup chain</div>
+          {!st || !st.configured ? (
+            <p className="small muted">
+              No API keys yet, so answers come from offline rules. Add free keys to <code>.env</code> (see <code>.env.example</code>) and restart. Each key becomes a backup.
+            </p>
+          ) : (
+            <>
+              <p className="tiny subtle">Tried top to bottom. If one is rate-limited or down, the next answers automatically.</p>
+              <ol className="ai-chain">
+                {st.chain.map((c) => (
+                  <li key={c.id} className={c.state}>
+                    <i />
+                    <span className="ai-name">
+                      {c.label} <span className="mono">{c.model}</span>
+                    </span>
+                    <span className="ai-state">
+                      {STATE_TEXT[c.state]}
+                      {c.retryInSec > 0 && c.state !== 'ready' ? ` · ${c.retryInSec > 120 ? `${Math.round(c.retryInSec / 60)} min` : `${c.retryInSec}s`}` : ''}
+                    </span>
+                    {c.reason && c.state !== 'ready' && <span className="ai-reason">{c.reason}</span>}
+                  </li>
+                ))}
+              </ol>
+              <div className="ai-stats tiny subtle">
+                {st.stats.served} AI answers · {st.stats.failovers} automatic switches · {st.stats.offlineAnswers} offline fallbacks
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Navbar({ page, look, onLook, health }) {
   return (
     <header className="nav">
@@ -164,12 +223,7 @@ export function Navbar({ page, look, onLook, health }) {
         </nav>
         <span className="spacer" />
         <Search />
-        {health && (
-          <span className={`status hide-sm ${health.offlineDemo ? '' : 'live'}`} title={`${health.label} · ${health.model}`}>
-            <i />
-            {health.offlineDemo ? 'Offline mode' : `AI: ${health.label}`}
-          </span>
-        )}
+        {health && <AIStatus health={health} />}
         <button className="icon-btn" onClick={() => onLook({ ...look, mode: look.mode === 'light' ? 'dark' : 'light' })} aria-label={`Switch to ${look.mode === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${look.mode === 'light' ? 'dark' : 'light'} mode`}>
           <Icon name={look.mode === 'light' ? 'moon' : 'sun'} size={15} />
         </button>

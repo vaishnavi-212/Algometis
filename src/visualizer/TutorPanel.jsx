@@ -12,7 +12,7 @@ export function TutorPanel({ algoId, input, stepIndex, onJump, onLoadInput }) {
   useEffect(() => {
     // scroll only the chat box, never the whole page
     const box = end.current?.parentElement
-    if (box) box.scrollTop = box.scrollHeight
+    if (box && (log.length || busy)) box.scrollTop = box.scrollHeight
   }, [log])
   useEffect(() => {
     setLog([])

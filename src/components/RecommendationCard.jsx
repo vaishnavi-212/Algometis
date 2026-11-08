@@ -179,7 +179,7 @@ export function RecommendationCard({ rec, trace, path }) {
           <span className="kicker">Best fit for: {rec.scoring.familyLabel.toLowerCase()}</span>
           <span className="grow" />
           <span className={`chip ${rec.explanationSource === 'llm' ? 'ok' : 'info'}`} title={rec.explanationFallbackReason ? `AI text failed fact-check: ${rec.explanationFallbackReason.join('; ')}` : ''}>
-            {rec.explanationSource === 'llm' ? 'Written by AI, numbers fact-checked' : 'Rule-generated explanation'}
+            {rec.explanationSource === 'llm' ? `Written by ${rec.explanationModel || 'AI'}, numbers fact-checked` : 'Rule-generated explanation'}
           </span>
           <span className={`chip ${rec.critic.repaired ? 'warn' : 'ok'}`}>{rec.critic.repaired ? 'critic: auto-repaired' : `critic approved${rec.critic.revisions ? ` after ${rec.critic.revisions} revision(s)` : ''}`}</span>
         </div>
