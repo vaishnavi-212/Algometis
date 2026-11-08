@@ -3,7 +3,8 @@ import { api } from './api.js'
 import { initialLook, applyLook } from './theme.js'
 import { Navbar, Footer } from './components/Navbar.jsx'
 import { HomePage, ExplorePage } from './pages/HomePage.jsx'
-import { SolvePage } from './pages/SolvePage.jsx'
+import { SolvePage as MentorPage } from './pages/MentorPage.jsx'
+import { SolvePage as CodeReviewPage } from './pages/CodeReviewPage.jsx'
 import { VisualizePage } from './pages/VisualizePage.jsx'
 import { PracticePage } from './pages/PracticePage.jsx'
 import { ErrorBoundary } from './components/ErrorBoundary.jsx'
@@ -43,7 +44,10 @@ export function App() {
   let nav = page
   if (page === 'mentor' || page === 'solve') {
     nav = 'mentor'
-    content = <SolvePage store={solveStore} setStore={setSolveStore} health={health} />
+    content = <MentorPage store={solveStore} setStore={setSolveStore} health={health} />
+  } else if (page === 'code-review' || page === 'review') {
+    nav = 'code-review'
+    content = <CodeReviewPage />
   } else if (page === 'explore' || page === 'learn') {
     nav = 'explore'
     content = <ExplorePage />

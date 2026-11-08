@@ -6,7 +6,8 @@ import { Icon } from './ui.jsx'
 
 const LINKS = [
   ['home', 'Home', '#/'],
-  ['mentor', 'Code Review', '#/mentor'],
+  ['mentor', 'AI Mentor', '#/mentor'],
+  ['code-review', 'Code Review', '#/code-review'],
   ['explore', 'Visualizers', '#/explore'],
   ['practice', 'Practice', '#/practice'],
 ]
