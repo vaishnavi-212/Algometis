@@ -252,7 +252,7 @@ async function explainerNode(state, { llm }) {
     }
     const check = checkClaims([args.because, args.inYourWords, args.personalNote], pack)
     trace.push(T.check('explainer', `Fact-check of explanation (attempt ${attempt})`, check.ok ? 'Every number and complexity matches the facts' : check.issues, check.ok))
-    if (check.ok) explanation = { because: args.because, inYourWords: args.inYourWords || '', personalNote: args.personalNote || '', source: llm.isMock ? 'rules' : 'llm', attempts: attempt }
+    if (check.ok) explanation = { because: args.because, inYourWords: args.inYourWords || '', personalNote: args.personalNote || '', source: llm.isMock || res.isMock ? 'rules' : 'llm', model: res.isMock ? 'offline rules' : res.label ? `${res.label} · ${res.model}` : undefined, attempts: attempt }
     else {
       issues = check.issues
       messages.push({ role: 'assistant', content: '', toolCalls: res.toolCalls }, { role: 'tool', toolCallId: res.toolCalls[0].id, name: 'write_explanation', content: JSON.stringify({ rejected: true, issues: check.issues, instruction: 'Rewrite using only facts from the fact pack.' }) })
@@ -291,6 +291,7 @@ async function finalizeNode(state, { store }) {
       inYourWords: state.explanation.inYourWords,
       personalNote: state.explanation.personalNote,
       explanationSource: state.explanation.source,
+      explanationModel: state.explanation.model,
       explanationFallbackReason: state.explanation.fallbackReason || null,
       analysis: { summary: state.analysis.summary, assumptions: state.analysis.assumptions, entities: state.analysis.entities, problemType: state.analysis.problemType },
       constraintFields: FAMILIES[state.analysis.problemType].fields,

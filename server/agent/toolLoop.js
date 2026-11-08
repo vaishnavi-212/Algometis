@@ -24,7 +24,7 @@ export async function runToolLoop({ llm, system, messages, tools, handlers, maxT
   for (let turn = 1; turn <= maxTurns; turn++) {
     const res = await llm.chat({ system, messages: msgs, tools, toolChoice: 'auto', purpose, hint: hint ? hint() : undefined })
     msgs.push({ role: 'assistant', content: res.text || '', toolCalls: res.toolCalls })
-    if (res.text) trace.push(T.llm(node, `Thinks (turn ${turn})`, res.text))
+    if (res.text) trace.push(T.llm(node, `Thinks (turn ${turn}${res.label ? ` · ${res.isMock ? 'offline rules' : res.label}` : ''})`, res.text))
     if (!res.toolCalls?.length) {
       finalText = res.text
       return { messages: msgs, trace, turns: turn, finalText, stopped: false }
